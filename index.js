@@ -1,70 +1,66 @@
-const Joi = require('@hapi/joi'); 
+const Joi = require('@hapi/joi');
 const express = require('express');
-const bodyParser = require('body-parser'); 
+const bodyParser = require('body-parser');
+
+var Todo = require('./models/Todo');
 
 const app = express();
 const port = process.env.PORT || 8080;
 
-app.use(bodyParser.urlencoded({extended : false}))
+var mongoose = require('mongoose');
+var mongoDB = 'mongodb+srv://<username>:<password>@cluster0-sjw6m.mongodb.net/test?retryWrites=true&w=majority';
+mongoose.connect(mongoDB, { useNewUrlParser: true });
+var db = mongoose.connection;
+db.on('error', console.error.bind(console, 'MongoDB connection error:'));
+
+app.use(bodyParser.urlencoded({ extended: false }))
 app.use(express.json())
 
-let todos = []
+// let todos = []
 
 app.get('/', (req, res) => {
   res.send('<h1>Welcome to Express Session!!!</h1>')
 })
 
 app.get('/todos', (req, res) => {
-  res.status(200).send(todos);
+  Todo.find({}, function (err, todos) {
+    res.status(200).send(todos);
+  });
 })
 
-app.get('/todo/bytitle', (req, res) => {
-  const todo = todos.find(todo => req.query.title === todo.title)
-
-  if(!todo) {
-    res.status(400).send('Todo not found!!!')
-  } else {
-    res.status(200).send(todo)
-  }
+app.get('/todo/:title', (req, res) => {
+  Todo.find({'title': req.params.title}, function (err, todos) {
+    res.status(200).send(todos);
+  });
 })
 
 app.get('/todo/:id', (req, res) => {
-  const todo = todos.find((todo) => todo.id == req.params.id)
-
-  if(!todo) {
-    res.status(400).send('Todo not found!!!');
-  } else {
-    res.status(200).send(todo);
-  }
+  Todo.findById(req.params.id, function (err, todos) {
+    res.status(200).send(todos);
+  });
 })
 
 app.post('/todo/create', (req, res) => {
-  const todo  = {
-    id : Math.round(Math.random()*110101),
-    title: req.body.title
-  }
-  todos.push(todo);
-  res.status(200).send(todo);
+  new Todo({
+    title: req.body.title,
+    done: req.body.done
+  }).save(function (err, todo, count) {
+    if (err) return next(err);
+    res.status(200).send(todo);
+  });
 })
 
 app.put('/todo/update/:id', (req, res) => {
-  const id = req.params.id;
-  todos.map(todo => {
-    if(todo.id === parseInt(id)) {
-      todo.title = req.body.title;
-      res.status(200).send(todo)
-      return todo;
-    } else {
-      res.status(400).send('Todo not found!!!')
-      return todo;
-    }
-  })
+  Todo.findOneAndUpdate({ _id: req.params.id }, {'title': req.body.title}, { upsert: true }, function (err, doc) {
+    if (err) return res.send(500, { error: err });
+    return res.send('Succesfully updated.');
+  });
 })
 
 app.delete('/todo/delete/:id', (req, res) => {
-  const id = req.params.id;
-  todos = todos.filter(todo => todo.id !== id)
-  return res.status(200).send(todos);
+  Todo.findByIdAndRemove(req.params.id, function(err){
+    return res.status(200).send({'message': "Item has been deleted"});
+  });
 })
 
 app.listen(port, () => {
